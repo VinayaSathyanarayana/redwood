@@ -3,7 +3,43 @@ import fs from 'fs'
 
 import findUp from 'findup-sync'
 
-import { Paths, PagesDependency } from './types'
+export interface NodeTargetPaths {
+  base: string
+  db: string
+  dbSchema: string
+  src: string
+  functions: string
+  graphql: string
+  lib: string
+  services: string
+  config: string
+}
+
+export interface BrowserTargetPaths {
+  base: string
+  src: string
+  routes: string
+  pages: string
+  components: string
+  layouts: string
+  config: string
+  webpack: string
+  postcss: string
+}
+
+export interface Paths {
+  base: string
+  web: BrowserTargetPaths
+  api: NodeTargetPaths
+}
+
+export interface PagesDependency {
+  importName: string
+  importPath: string
+  const: string
+  path: string
+  importStatement: string
+}
 
 const CONFIG_FILE_NAME = 'redwood.toml'
 
@@ -12,14 +48,17 @@ const PATH_API_DIR_GRAPHQL = 'api/src/graphql'
 const PATH_API_DIR_DB = 'api/prisma'
 const PATH_API_DIR_DB_SCHEMA = 'api/prisma/schema.prisma'
 const PATH_API_DIR_CONFIG = 'api/src/config'
+const PATH_API_DIR_LIB = 'api/src/lib'
 const PATH_API_DIR_SERVICES = 'api/src/services'
 const PATH_API_DIR_SRC = 'api/src'
-const PATH_WEB_ROUTES = 'web/src/Routes.js'
+const PATH_WEB_ROUTES = 'web/src/Routes' // .js|.tsx
 const PATH_WEB_DIR_LAYOUTS = 'web/src/layouts/'
 const PATH_WEB_DIR_PAGES = 'web/src/pages/'
 const PATH_WEB_DIR_COMPONENTS = 'web/src/components'
 const PATH_WEB_DIR_SRC = 'web/src'
-const PATH_WEB_DIR_CONFIG = 'web/config/webpack.config.js'
+const PATH_WEB_DIR_CONFIG = 'web/config'
+const PATH_WEB_DIR_CONFIG_WEBPACK = 'web/config/webpack.config.js'
+const PATH_WEB_DIR_CONFIG_POSTCSS = 'web/config/postcss.config.js'
 
 /**
  * Search the parent directories for the Redwood configuration file.
@@ -42,27 +81,51 @@ export const getBaseDir = (configPath: string = getConfigPath()): string => {
 }
 
 /**
+ * Use this to resolve files when the path to the file is known, but the extension
+ * is not.
+ */
+export const resolveFile = (
+  filePath: string,
+  extensions: string[] = ['.js', '.tsx', '.ts']
+): string | null => {
+  for (const extension of extensions) {
+    const p = `${filePath}${extension}`
+    if (fs.existsSync(p)) {
+      return p
+    }
+  }
+  return null
+}
+
+/**
  * Path constants that are relevant to a Redwood project.
  */
 export const getPaths = (BASE_DIR: string = getBaseDir()): Paths => {
+  const routes = resolveFile(path.join(BASE_DIR, PATH_WEB_ROUTES)) as string
+
   return {
     base: BASE_DIR,
     api: {
+      base: path.join(BASE_DIR, 'api'),
       db: path.join(BASE_DIR, PATH_API_DIR_DB),
       dbSchema: path.join(BASE_DIR, PATH_API_DIR_DB_SCHEMA),
       functions: path.join(BASE_DIR, PATH_API_DIR_FUNCTIONS),
       graphql: path.join(BASE_DIR, PATH_API_DIR_GRAPHQL),
+      lib: path.join(BASE_DIR, PATH_API_DIR_LIB),
       config: path.join(BASE_DIR, PATH_API_DIR_CONFIG),
       services: path.join(BASE_DIR, PATH_API_DIR_SERVICES),
       src: path.join(BASE_DIR, PATH_API_DIR_SRC),
     },
     web: {
-      routes: path.join(BASE_DIR, PATH_WEB_ROUTES),
+      routes,
+      base: path.join(BASE_DIR, 'web'),
       pages: path.join(BASE_DIR, PATH_WEB_DIR_PAGES),
       components: path.join(BASE_DIR, PATH_WEB_DIR_COMPONENTS),
       layouts: path.join(BASE_DIR, PATH_WEB_DIR_LAYOUTS),
       src: path.join(BASE_DIR, PATH_WEB_DIR_SRC),
-      webpack: path.join(BASE_DIR, PATH_WEB_DIR_CONFIG),
+      config: path.join(BASE_DIR, PATH_WEB_DIR_CONFIG),
+      webpack: path.join(BASE_DIR, PATH_WEB_DIR_CONFIG_WEBPACK),
+      postcss: path.join(BASE_DIR, PATH_WEB_DIR_CONFIG_POSTCSS),
     },
   }
 }
@@ -82,23 +145,32 @@ export const processPagesDir = (
   // subdirectories.
   entries.forEach((entry) => {
     if (entry.isDirectory()) {
-      // Actual JS files reside in a directory of the same name, so let's
-      // construct the filename of the actual Page file.
-      const testFile = path.join(webPagesDir, entry.name, entry.name + '.js')
+      try {
+        // Actual page js or tsx files reside in a directory of the same
+        // name (supported by: directory-named-webpack-plugin), so let's
+        // construct the filename of the actual Page file.
+        // `require.resolve` will throw if a module cannot be found.
+        const importPath = path.join(webPagesDir, entry.name, entry.name)
+        require.resolve(importPath)
 
-      if (fs.existsSync(testFile)) {
         // If the Page exists, then construct the dependency object and push it
         // onto the deps array.
-        const basename = path.posix.basename(entry.name, '.js')
+        const basename = path.posix.basename(entry.name)
         const importName = prefix.join() + basename
         // `src/pages/<PageName>`
         const importFile = ['src', 'pages', ...prefix, basename].join('/')
         deps.push({
+          importName,
+          importPath,
           const: importName,
           path: path.join(webPagesDir, entry.name),
-          importStatement: `const ${importName} = { name: '${importName}', loader: () => import('${importFile}') }`,
+          importStatement: `const ${importName
+            .split(',')
+            .join('')} = { name: '${importName
+            .split(',')
+            .join('')}', loader: () => import('${importFile}') }`,
         })
-      } else {
+      } catch (e) {
         // If the Page doesn't exist then we are in a directory of Page
         // directories, so let's recurse into it and do the whole thing over
         // again.

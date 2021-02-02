@@ -1,0 +1,10 @@
+const ${pascalName}Page = () => {
+  return (
+    <div>
+      <h1>${pascalName}Page</h1>
+      <p>Find me in ${outputPath}</p>
+    </div>
+  )
+}
+
+export default ${pascalName}Page

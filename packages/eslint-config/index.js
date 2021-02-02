@@ -10,6 +10,24 @@
 // [^1] https://eslint.org/docs/rules/
 // [^2] https://www.npmjs.com/package/eslint-plugin-react#list-of-supported-rules
 
+let supportRedwoodAutoPageImports = false
+try {
+  // This will throw if the module cannot be resolved,
+  // it will not resolve if the module is not built,
+  // in which case we're probably
+  // building the framework and don't need this plugin.
+  require.resolve('@redwoodjs/eslint-plugin-redwood')
+  supportRedwoodAutoPageImports = {
+    files: ['web/src/Routes.js', 'web/src/Routes.ts'],
+    rules: {
+      'no-undef': 'off',
+      '@redwoodjs/redwood/no-unavailable-pages': 'error',
+    },
+  }
+} catch (e) {
+  // noop
+}
+
 module.exports = {
   parser: 'babel-eslint',
   plugins: [
@@ -20,8 +38,8 @@ module.exports = {
     'react',
     'react-hooks',
     'jest-dom',
-    '@redwoodjs/redwood',
-  ],
+    supportRedwoodAutoPageImports && '@redwoodjs/eslint-plugin-redwood',
+  ].filter(Boolean),
   ignorePatterns: ['node_modules', 'dist'],
   extends: [
     'eslint:recommended',
@@ -38,22 +56,22 @@ module.exports = {
         'plugin:@typescript-eslint/recommended',
         'prettier/@typescript-eslint',
       ],
-    },
-    {
-      files: ['web/src/Routes.js', 'web/src/Routes.ts'],
       rules: {
-        'no-undef': 'off',
-        '@redwoodjs/redwood/no-unavailable-pages': 'error',
+        '@typescript-eslint/explicit-function-return-type': 'off',
+        '@typescript-eslint/no-empty-interface': 'off',
+        'typescript-eslint/no-empty-function': 'off',
+        'no-empty-function': 'off',
+        '@typescript-eslint/no-empty-function': 'off',
       },
     },
+    supportRedwoodAutoPageImports,
     {
       files: ['api/src/**'],
       globals: {
-        db: 'readonly',
         context: 'readonly',
       },
     },
-  ],
+  ].filter(Boolean),
   settings: {
     // This is used to support our `import/order` configuration.
     'import/resolver': {
@@ -73,8 +91,6 @@ module.exports = {
   globals: {
     gql: 'readonly',
     React: 'readonly',
-    __REDWOOD__: 'readonly',
-    __REDWOOD__API_PROXY_PATH: 'readonly',
   },
   rules: {
     'prettier/prettier': 'error',

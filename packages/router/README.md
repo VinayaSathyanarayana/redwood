@@ -40,6 +40,26 @@ To create a route to a normal Page, you'll pass three props: `path`, `page`, and
 
 The `path` prop specifies the URL path to match, starting with the beginning slash. The `page` prop specifies the Page component to render when the path is matched. The `name` prop is used to specify the name of the _named route function_.
 
+## Private Routes
+Some pages should only be visible to authenticated users.
+
+All `Routes` nested in `<Private>` require authentication.
+When a user is not authenticated and attempts to visit this route,
+they will be redirected to the route passed as the `unauthenticated` prop.
+
+```js
+// Routes.js
+<Router>
+  <Route path="/" page={HomePage} name="home" />
+  <Private unauthenticated="home">
+    <Routes path="/admin" page={AdminPage} name="admin" />
+  </Private>
+</Router>
+```
+
+Redwood uses the `useAuth` hook under the hood to determine if the user is authenticated.
+Read more about authentication in redwood [here](https://redwoodjs.com/tutorial/authentication).
+
 ## Link and named route functions
 
 When it comes to routing, matching URLs to Pages is only half the equation. The other half is generating links to your pages. RR makes this really simple without having to hardcode URL paths. In a Page component, you can do this (only relevant bits are shown in code samples from now on):
@@ -55,6 +75,34 @@ const SomePage = () => <Link to={routes.home()} />
 You use a `Link` to generate a link to one of your routes and can access URL generators for any of your routes from the `routes` object. We call the functions on the `routes` object _named route functions_ and they are named after whatever you specify in the `name` prop of the `Route`.
 
 Named route functions simply return a string, so you can still pass in hardcoded strings to the `to` prop of the `Link` component, but using the proper named route function is easier and safer. Plus, if you ever decide to change the `path` of a route, you don't need to change any of the `Link`s to it (as long as you keep the `name` the same)!
+
+## Active links
+
+`NavLink` is a special version of `Link` that will add an `activeClassName` to the rendered element when it matches the current URL.
+
+```js
+// MainMenu.js
+import { NavLink, routes } from '@redwoodjs/router'
+
+// Will render <a href="/" className="link activeLink"> when on the home page
+const MainMenu = () => <NavLink className="link" activeClassName="activeLink" to={routes.home()} >Home</NavLink>
+```
+
+You can `useMatch` to create your own component with active styles. `NavLink` uses it internally!
+
+```js
+import { Link, routes, useMatch } from '@redwoodjs/router'
+
+const CustomLink = ({to, ...rest}) => {
+  const matchInfo = useMatch(to)
+
+  return <SomeStyledComponent as={Link} to={to} isActive={matchInfo.match} />
+}
+
+const MainMenu = () => {
+  return <CustomLink to={routes.about()} />
+}
+```
 
 ## Route parameters
 
@@ -166,6 +214,21 @@ const SomePage = () => {
     navigate(routes.home())
   }
   ...
+}
+```
+
+## Redirect
+
+If you want to declaratively redirect to a different page, use the `<Redirect>` component.
+
+In the example below, SomePage will redirect to the home page.
+
+```js
+// SomePage.js
+import { Redirect, routes } from '@redwoodjs/router'
+
+const SomePage = () => {
+  <Redirect to={routes.home()}/>
 }
 ```
 

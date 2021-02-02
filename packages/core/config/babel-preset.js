@@ -13,7 +13,7 @@ const TARGETS_NODE = '12.16.1'
 const CORE_JS_VERSION = '3.6'
 
 module.exports = () => ({
-  presets: ['@babel/preset-react', '@babel/typescript'],
+  presets: ['@babel/preset-react', '@babel/preset-typescript'],
   plugins: [
     ['@babel/plugin-proposal-class-properties', { loose: true }],
     'babel-plugin-macros',
@@ -77,6 +77,7 @@ module.exports = () => ({
             ],
           },
         ],
+        [require('../dist/babel-plugin-redwood-import-dir')],
       ],
     },
     // ** WEB **
@@ -127,6 +128,17 @@ module.exports = () => ({
           },
         ],
       ],
+    },
+    // ** Files ending in `Cell` **
+    {
+      test: /.+Cell.(js|tsx)$/,
+      plugins: [require('../dist/babel-plugin-redwood-cell')],
+    },
+    // Automatically import files in `./web/src/pages/*` in to
+    // the `./web/src/Routes.[ts|jsx]` file.
+    {
+      test: ['./web/src/Routes.js', './web/src/Routes.tsx'],
+      plugins: [require('../dist/babel-plugin-redwood-routes-auto-loader')],
     },
   ],
 })

@@ -1,10 +1,16 @@
 import path from 'path'
 
+import camelcase from 'camelcase'
+import pluralize from 'pluralize'
 import Listr from 'listr'
 import pascalcase from 'pascalcase'
+import { paramCase } from 'param-case'
+import terminalLink from 'terminal-link'
 
 import { generateTemplate, getPaths, writeFilesTask } from 'src/lib'
 import c from 'src/lib/colors'
+
+import { yargsDefaults } from '../generate'
 
 /**
  * Reduces boilerplate for generating an output path and content to write to disk
@@ -18,25 +24,41 @@ export const templateForComponentFile = ({
   extension = '.js',
   webPathSection,
   apiPathSection,
+  generator,
   templatePath,
   templateVars,
   componentName,
+  outputPath,
 }) => {
   const basePath = webPathSection
     ? getPaths().web[webPathSection]
     : getPaths().api[apiPathSection]
-  const outputComponentName = componentName || pascalcase(name) + suffix
-  const outputPath = path.join(
-    basePath,
-    outputComponentName,
-    outputComponentName + extension
+  const outputComponentName =
+    componentName || pascalcase(paramCase(name)) + suffix
+  const componentOutputPath =
+    outputPath ||
+    path.join(basePath, outputComponentName, outputComponentName + extension)
+  const content = generateTemplate(
+    path.join(generator, 'templates', templatePath),
+    {
+      name,
+      // Complexity here is for Windows support
+      outputPath: `.${path.sep}${path.relative(
+        getPaths().base,
+        componentOutputPath
+      )}`.replace(/\\/g, '/'),
+      ...templateVars,
+    }
   )
-  const content = generateTemplate(templatePath, {
-    name,
-    outputPath: `./${path.relative(getPaths().base, outputPath)}`,
-    ...templateVars,
-  })
-  return [outputPath, content]
+  return [componentOutputPath, content]
+}
+
+/**
+ * Creates a route path, either returning the existing path if passed, otherwise
+ * creates one based on the name
+ */
+export const pathName = (path, name) => {
+  return path ?? `/${paramCase(name)}`
 }
 
 /**
@@ -47,19 +69,35 @@ export const templateForComponentFile = ({
 export const createYargsForComponentGeneration = ({
   componentName,
   filesFn,
+  builderObj = yargsDefaults,
 }) => {
   return {
     command: `${componentName} <name>`,
-    desc: `Generate a ${componentName} component.`,
-    builder: { force: { type: 'boolean', default: false } },
-    handler: async ({ force, ...rest }) => {
+    description: `Generate a ${componentName} component`,
+    builder: (yargs) => {
+      yargs
+        .positional('name', {
+          description: `Name of the ${componentName}`,
+          type: 'string',
+        })
+        .epilogue(
+          `Also see the ${terminalLink(
+            'Redwood CLI Reference',
+            `https://redwoodjs.com/reference/command-line-interface#generate-${componentName}`
+          )}`
+        )
+      Object.entries(builderObj).forEach(([option, config]) => {
+        yargs.option(option, config)
+      })
+    },
+    handler: async (options) => {
       const tasks = new Listr(
         [
           {
             title: `Generating ${componentName} files...`,
             task: async () => {
-              const f = await filesFn(rest)
-              return writeFilesTask(f, { overwriteExisting: force })
+              const f = await filesFn(options)
+              return writeFilesTask(f, { overwriteExisting: options.force })
             },
           },
         ],
@@ -73,4 +111,21 @@ export const createYargsForComponentGeneration = ({
       }
     },
   }
+}
+
+// Returns all relations to other models
+export const relationsForModel = (model) => {
+  return model.fields
+    .filter((f) => f.relationName)
+    .map((field) => {
+      const relationName = camelcase(field.type)
+      return field.isList ? pluralize(relationName) : relationName
+    })
+}
+
+// Returns only relations that are of datatype Int
+export const intForeignKeysForModel = (model) => {
+  return model.fields
+    .filter((f) => f.name.match(/Id$/) && f.type === 'Int')
+    .map((f) => f.name)
 }

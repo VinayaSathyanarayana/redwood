@@ -1,7 +1,11 @@
-export { __REDWOOD__ } from './config'
-export { default as RedwoodProvider, useAuth } from './RedwoodProvider'
+import './config'
+
 export { default as gql } from 'graphql-tag'
+export { useQuery, useMutation, useApolloClient } from '@apollo/react-hooks'
+
+export { default as FatalErrorBoundary } from 'src/components/FatalErrorBoundary'
+export { default as RedwoodProvider } from 'src/components/RedwoodProvider'
+
 export * from './graphql'
-export { useQuery, useMutation } from '@apollo/react-hooks'
 export * from './form/form'
-export { default as FatalErrorBoundary } from './FatalErrorBoundary'
+export * from './flash'

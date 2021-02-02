@@ -1,56 +1,64 @@
+import fs from 'fs'
 import path from 'path'
 
 import concurrently from 'concurrently'
+import terminalLink from 'terminal-link'
 
 import { getPaths } from 'src/lib'
 import c from 'src/lib/colors'
-import { handler as generatePrismaClient } from 'src/commands/dbCommands/generate'
 
-export const command = 'dev [app..]'
-export const desc = 'Run development servers.'
-export const builder = {
-  app: { choices: ['db', 'api', 'web'], default: ['db', 'api', 'web'] },
+export const command = 'dev [side..]'
+export const description = 'Start development servers for api, db, and web'
+export const builder = (yargs) => {
+  yargs
+    .positional('side', {
+      choices: ['api', 'web'],
+      default: ['api', 'web'],
+      description: 'Which dev server(s) to start',
+      type: 'array',
+    })
+    .epilogue(
+      `Also see the ${terminalLink(
+        'Redwood CLI Reference',
+        'https://redwoodjs.com/reference/command-line-interface#dev'
+      )}`
+    )
 }
 
-export const handler = async ({ app = ['db', 'api', 'web'] }) => {
-  // For Windows: Replaces ` ` with `\ `. Damn, there has got to be a better
-  // way to sanitize paths?!
-  const BASE_DIR = getPaths().base.replace(' ', '\\ ')
-
-  // Generate the Prisma client if it doesn't exist.
-  await generatePrismaClient({ verbose: false, force: false })
+export const handler = async ({ side = ['api', 'web'] }) => {
+  // We use BASE_DIR when we need to effectively set the working dir
+  const BASE_DIR = getPaths().base
+  // For validation, e.g. dirExists?, we use these
+  // note: getPaths().web|api.base returns undefined on Windows
+  const API_DIR_SRC = getPaths().api.src
+  const WEB_DIR_SRC = getPaths().web.src
 
   const jobs = {
     api: {
       name: 'api',
-      command: `cd ${path.join(BASE_DIR, 'api')} && yarn dev-server`,
+      command: `cd "${path.join(BASE_DIR, 'api')}" && yarn dev-server`,
       prefixColor: 'cyan',
-    },
-    db: {
-      name: ' db', // prefixed with ` ` to match output indentation.
-      command: `cd ${path.join(
-        BASE_DIR,
-        'api'
-      )} && yarn prisma2 generate --watch`,
-      prefixColor: 'magenta',
+      runWhen: () => fs.existsSync(API_DIR_SRC),
     },
     web: {
       name: 'web',
-      command: `cd ${path.join(
+      command: `cd "${path.join(
         BASE_DIR,
         'web'
-      )} && yarn webpack-dev-server --config ../node_modules/@redwoodjs/core/config/webpack.development.js`,
+      )}" && yarn webpack-dev-server --config ../node_modules/@redwoodjs/core/config/webpack.development.js`,
       prefixColor: 'blue',
+      runWhen: () => fs.existsSync(WEB_DIR_SRC),
     },
   }
 
   concurrently(
     Object.keys(jobs)
-      .map((n) => app.includes(n) && jobs[n])
-      .filter(Boolean),
+      .map((n) => side.includes(n) && jobs[n])
+      .filter((job) => job && job.runWhen()),
     {
       restartTries: 3,
-      prefix: '{time} {name} |',
+      restartDelay: 1000,
+      prefix: '{name} |',
       timestampFormat: 'HH:mm:ss',
     }
   ).catch((e) => {
